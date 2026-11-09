@@ -4,7 +4,7 @@ This is a trophy based on ESPHome, including an art display with RGB lighting an
 The original BrezeLAN 2026 trophy sports a unique engraving on the art display that has been removed for copyright reasons.
 
 ## BOM
-* ~70g of Filament, preferably black or filled - most be opaque to prevent light bleeding. PLA is fine, use ABS/ASA for longevity
+* ~70g of Filament, preferably black or CF/GF filled - must be opaque to prevent light bleeding. PLA is fine, use ABS/ASA for longevity
 * 8x M3x4x5 heat set insert
 * 4x M3x12 SHCS
 * 2x M3x16 BHCS
