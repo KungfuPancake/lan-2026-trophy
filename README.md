@@ -90,7 +90,9 @@ Plug in the trophy with a USB cable and run esphome with e.g. `esphome run --dev
 The trophy uses ESPHome but can be used independently if no e.g. HomeAssistant installation is present, for those purposes the API reboot timeout has been removed.
 
 ### Improv BLE/Serial
-To provision the trophy with new Wi-Fi credentials you can use Improv via BLE or serial, with serial being easily accessible using any computer with a WebUSB capable browser. Open up the Improv [website](https://www.improv-wifi.com/) and follow the instructions. The trophy also display a QR code with a link to this website when it can't connect to a Wi-Fi network.
+To provision the trophy with new Wi-Fi credentials you can use Improv via BLE or serial, with serial being easily accessible using any computer with a WebUSB capable browser. Connect the trophy to your PC using a USB cable. A serial/JTAG should appear, no drivers are required.
+
+Open up the Improv [website](https://www.improv-wifi.com/) and click "Connect device to Wi-Fi", then follow the instructions. The trophy also display a QR code with a link to this website when it can't connect to a Wi-Fi network.
 
 ### Web Interface
 The trophy will display its hostname during startup - it uses `devicename` as its hostname for DHCP. Depending on your network configuration it should be enough to open `$devicename.local` in your browser.
