@@ -1,0 +1,6 @@
+substitutions:
+  devicename: kibbeling
+  friendly_name: "BrezeLAN Kibbeling"
+
+packages:
+  - !include includes/lan_2026_trophy.yml

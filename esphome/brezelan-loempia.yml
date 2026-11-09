@@ -1,0 +1,6 @@
+substitutions:
+  devicename: loempia
+  friendly_name: "BrezeLAN Loempia"
+
+packages:
+  - !include includes/lan_2026_trophy.yml

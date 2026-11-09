@@ -1,0 +1,6 @@
+substitutions:
+  devicename: brezelan-devkit
+  friendly_name: "BrezeLAN Devkit"
+
+packages:
+  - !include includes/lan_2026_trophy.yml

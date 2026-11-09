@@ -1,0 +1,6 @@
+substitutions:
+  devicename: mexicano
+  friendly_name: "BrezeLAN Mexicano"
+
+packages:
+  - !include includes/lan_2026_trophy.yml

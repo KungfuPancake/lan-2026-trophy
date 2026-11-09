@@ -1,0 +1,6 @@
+substitutions:
+  devicename: bitterballen
+  friendly_name: "BrezeLAN Bitterballen"
+
+packages:
+  - !include includes/lan_2026_trophy.yml

@@ -1,0 +1,6 @@
+substitutions:
+  devicename: kipcorn
+  friendly_name: "BrezeLAN Kipcorn"
+
+packages:
+  - !include includes/lan_2026_trophy.yml

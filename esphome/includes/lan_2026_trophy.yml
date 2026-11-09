@@ -1,0 +1,483 @@
+esphome:
+  name: $devicename
+  friendly_name: $friendly_name
+  on_boot:
+    then:
+      - script.execute: set_illumination
+
+esp32:
+  variant: esp32c3
+  framework:
+    type: esp-idf
+    advanced:
+      flash_chip: generic
+
+preferences:
+  flash_write_interval: 1min
+
+logger:
+  level: WARN
+
+wifi:
+  id: wifi_interface
+  fast_connect: true
+  power_save_mode: HIGH
+  output_power: 12
+  reboot_timeout: 0s
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+
+  on_connect:
+    then:
+      - script.execute: refresh_lans
+      - script.execute: set_illumination
+
+improv_serial:
+
+improv_ble:
+  authorizer: none
+  wifi_timeout: 30s
+
+  on_state:
+    then:
+      - lambda: id(improv_state) = state;
+      - script.execute: set_illumination
+
+web_server:
+  port: 80
+
+api:
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+    password: ""
+  - platform: web_server
+
+http_request:
+
+globals:
+  - id: lan_active
+    type: bool
+
+  - id: lan_exists
+    type: bool
+
+  - id: lan_name
+    type: std::string
+
+  - id: lan_eta
+    type: int
+
+  - id: valid_data
+    type: bool
+    initial_value: "false"
+
+  - id: improv_state
+    type: improv::State
+    initial_value: improv::STATE_STOPPED
+
+  - id: stealth_mode
+    type: bool
+    restore_value: yes
+    initial_value: "false"
+
+  - id: global_power
+    type: bool
+    restore_value: yes
+    initial_value: "true"
+
+script:
+  - id: refresh_lans
+    then:
+      - http_request.send:
+          method: GET
+          url: https://isteslan.de/trophy
+          capture_response: true
+          request_headers:
+            Accept: application/json
+            X-BrezeLAN-Trophy-Name: $friendly_name
+          on_response:
+            then:
+              - if:
+                  condition:
+                    lambda: return response->status_code == 200;
+                  then:
+                    - lambda: |-
+                        json::parse_json(body, [](JsonObject root) -> bool {
+                          id(valid_data) = true;
+                          id(lan_active) = root["lan_active"];
+                          if (root["current_or_next_lan"]) {
+                            id(lan_name) = root["current_or_next_lan"]["name"].as<std::string>();
+                            id(lan_eta) = root["current_or_next_lan"]["eta"];
+                            id(lan_exists) = true;
+                          } else {
+                            id(lan_exists) = false;
+                          }
+
+                          return true;
+                        });
+
+  - id: set_illumination
+    then:
+      lambda: |-
+        if (!id(global_power)) {
+          id(sign_internal).turn_off().perform();
+          id(backlight).turn_off().perform();
+        
+          return;
+        }
+        
+        if (id(sntp_time).now().is_valid() && id(stealth_mode) && (id(sntp_time).now().hour >= 22 || id(sntp_time).now().hour < 8)) {
+          id(sign_internal).turn_off().perform();
+          id(backlight).turn_off().perform();
+        
+          return;
+        }
+        
+        id(backlight).turn_on().set_brightness(0.75).perform();
+        
+        if (id(improv_state) != improv::STATE_STOPPED) {
+          id(sign_internal).turn_on().set_rgb(1.0, 0.0, 0.0).set_brightness(0.5).set_effect("none").perform();
+        
+          return;
+        }
+        
+        if (!id(wifi_interface).is_connected()) {
+          id(sign_internal).turn_on().set_rgb(0.0, 0.0, 1.0).set_brightness(0.5).set_effect("Info Pulse").perform();
+        
+          return;
+        }
+        
+        if (!id(sntp_time).now().is_valid()) {
+          id(sign_internal).turn_on().set_rgb(0.0, 1.0, 0.0).set_brightness(0.5).set_effect("Info Pulse").perform();
+        
+          return;
+        }
+        
+        if (id(sign_color).current_values.is_on()) {
+          if (id(lan_active)) {
+            id(sign_internal).turn_on().set_rgb(1.0, 1.0, 1.0).set_brightness(id(sign_color).current_values.get_brightness()).set_effect("Rainbow").perform();
+          } else {
+            auto call = id(sign_internal).turn_on();
+            call.set_rgb(id(sign_color).current_values.get_red(), id(sign_color).current_values.get_green(), id(sign_color).current_values.get_blue());
+            call.set_brightness(id(sign_color).current_values.get_brightness());
+            call.set_effect("none").perform();
+          }
+        } else {
+          id(sign_internal).turn_off().perform();
+        }
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Berlin
+    on_time_sync:
+      then:
+        - script.execute: set_illumination
+    on_time:
+      # Every 30 minutes
+      - seconds: 10
+        minutes: /30
+        then:
+          - script.execute: refresh_lans
+
+      - seconds: 0
+        minutes: 0
+        hours: 8
+        then:
+          - script.execute: set_illumination
+
+      - seconds: 0
+        minutes: 0
+        hours: 22
+        then:
+          - script.execute: set_illumination
+
+
+text_sensor:
+  - platform: version
+    name: "Version"
+    icon: mdi:cube-outline
+
+sensor:
+  - platform: uptime
+    name: Uptime
+
+  - platform: wifi_signal
+    name: WiFi Signal
+    update_interval: 60s
+
+output:
+  - platform: ledc
+    pin: GPIO20
+    id: backlight_out
+
+  - platform: template
+    id: sign_red
+    type: float
+    write_action:
+      - script.execute: set_illumination
+
+  - platform: template
+    id: sign_green
+    type: float
+    write_action:
+      - script.execute: set_illumination
+
+  - platform: template
+    id: sign_blue
+    type: float
+    write_action:
+      - script.execute: set_illumination
+
+  - platform: template
+    id: font_red
+    type: float
+    write_action:
+      - # nop
+
+  - platform: template
+    id: font_green
+    type: float
+    write_action:
+      - # nop
+
+  - platform: template
+    id: font_blue
+    type: float
+    write_action:
+      - # nop
+
+switch:
+  - platform: template
+    id: stealth_mode_switch
+    name: "Stealth Mode"
+    icon: mdi:owl
+    restore_mode: DISABLED
+    lambda: |-
+      return id(stealth_mode);
+    turn_on_action:
+      - globals.set:
+          id: stealth_mode
+          value: "true"
+      - script.execute: set_illumination
+    turn_off_action:
+      - globals.set:
+          id: stealth_mode
+          value: "false"
+      - script.execute: set_illumination
+
+  - platform: template
+    id: global_power_switch
+    name: "Global Power"
+    icon: mdi:power
+    restore_mode: DISABLED
+    lambda: |-
+      return id(global_power);
+    turn_on_action:
+      - globals.set:
+          id: global_power
+          value: "true"
+      - script.execute: set_illumination
+    turn_off_action:
+      - globals.set:
+          id: global_power
+          value: "false"
+      - script.execute: set_illumination
+
+light:
+  - platform: monochromatic
+    id: backlight
+    output: backlight_out
+
+  - platform: esp32_rmt_led_strip
+    id: sign_internal
+    channel_colors: RGB
+    pin: GPIO5
+    num_leds: 2
+    chipset: ws2812
+    effects:
+      - pulse:
+          name: "Info Pulse"
+          transition_length: 500ms
+          update_interval: 2s
+          min_brightness: 10%
+          max_brightness: 50%
+      - addressable_rainbow:
+          name: "Rainbow"
+          speed: 1
+
+  - platform: rgb
+    id: sign_color
+    name: "Dickbutt Color"
+    icon: mdi:trophy
+    restore_mode: RESTORE_DEFAULT_ON
+    red: sign_red
+    green: sign_green
+    blue: sign_blue
+
+  - platform: rgb
+    id: text_color
+    name: "Text Color"
+    icon: mdi:format-color-text
+    restore_mode: RESTORE_DEFAULT_ON
+    red: sign_red
+    green: sign_green
+    blue: sign_blue
+
+qr_code:
+  - id: improv_qr
+    value: "https://www.improv-wifi.com/"
+
+font:
+  - file:
+      type: gfonts
+      family: Rajdhani
+      weight: 700
+    id: font_22
+    size: 22
+    bpp: 4
+
+  - file:
+      type: gfonts
+      family: Rajdhani
+      weight: 700
+    id: font_16
+    size: 16
+    bpp: 4
+
+  - file:
+      type: gfonts
+      family: Rajdhani
+      weight: 700
+    id: font_28
+    size: 28
+    bpp: 4
+    extras:
+      - file:
+          url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/refs/heads/master/fonts/materialdesignicons-webfont.ttf"
+          type: web
+        glyphs: [
+          "󰃰", # calendar-clock
+          "󰧒", # calendar-heart
+        ]
+
+  - file:
+      type: gfonts
+      family: Rajdhani
+      weight: 700
+    id: font_36
+    size: 36
+    bpp: 4
+    extras:
+      - file:
+          url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/refs/heads/master/fonts/materialdesignicons-webfont.ttf"
+          type: web
+        glyphs: [
+          "󰇡", # calendar-refresh
+          "󰃴", # calendar-remove
+        ]
+
+  - file:
+      type: gfonts
+      family: Rajdhani
+      weight: 700
+    id: font_clock
+    size: 64
+    bpp: 4
+    glyphs: [ "0123456789",":" ]
+
+  - file:
+      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/refs/heads/master/fonts/materialdesignicons-webfont.ttf"
+      type: web
+    id: icons_64
+    size: 64
+    bpp: 4
+    glyphs: [
+      "󱁖", # party-popper
+      "󰇳", # emoticon-cool-outline
+      "󱛄", # wifi-refresh
+      "󱫤", # timer-refresh
+    ]
+
+color:
+  - id: background_color
+    hex: "000000"
+
+spi:
+  clk_pin: GPIO7
+  mosi_pin: GPIO8
+
+display:
+  - platform: mipi_spi
+    model: CUSTOM
+    dc_pin: GPIO10
+    cs_pin: GPIO6
+    reset_pin: GPIO9
+    dimensions:
+      height: 280
+      width: 240
+      offset_height: 20
+      offset_width: 0
+      pad_width: 0
+      pad_height: 20
+    invert_colors: true
+    color_order: rgb
+    data_rate: 20MHz
+    rotation: 90
+    init_sequence:
+      - [ 0x11 ]
+      - delay 150ms
+      #- [ 0x21 ]
+      - [ 0x29 ]
+      - delay 100ms
+    pages:
+      - id: page_main
+        lambda: |-
+          it.fill(id(background_color));
+          
+          auto color = Color(id(text_color).current_values.get_red() * 255, id(text_color).current_values.get_green() * 255, id(text_color).current_values.get_blue() * 255);
+          auto secondary = Color(id(text_color).current_values.get_red() * 127, id(text_color).current_values.get_green() * 127, id(text_color).current_values.get_blue() * 127);
+          
+          if (id(improv_state) != improv::STATE_STOPPED) {
+            auto size = id(improv_qr).get_size() * 5; // Multiply by scale
+            auto x = (it.get_width() / 2) - (size / 2);
+            auto y = (it.get_height() / 2) - (size / 2) - 30;
+            it.qr_code(x, y, id(improv_qr), Color(255,255,255), 5);
+            it.printf(it.get_width() / 2, it.get_height() - 50, id(font_16), color, id(background_color), TextAlign::BOTTOM_CENTER, "WLAN-Setup (improv-wifi.com)");
+            it.printf(it.get_width() / 2, it.get_height() - 25, id(font_16), color, id(background_color), TextAlign::BOTTOM_CENTER, "Mein Name: $friendly_name");
+          
+            return;
+          }
+          
+          if (!id(wifi_interface).is_connected()) {
+            it.printf(it.get_width() / 2, it.get_height() / 2, id(icons_64), color, id(background_color), TextAlign::CENTER, "󱛄");
+            it.printf(it.get_width() / 2, it.get_height() - 25, id(font_16), color, id(background_color), TextAlign::BOTTOM_CENTER, "$friendly_name");
+          
+            return;
+          }
+          
+          if (!id(sntp_time).now().is_valid()) {
+            it.printf(it.get_width() / 2, it.get_height() / 2, id(icons_64), color, id(background_color), TextAlign::CENTER, "󱫤");
+            it.printf(it.get_width() / 2, it.get_height() - 25, id(font_16), color, id(background_color), TextAlign::BOTTOM_CENTER, "$friendly_name");
+          
+            return;
+          }
+          
+          it.strftime(it.get_width() / 2, 25, id(font_clock), color, id(background_color), TextAlign::TOP_CENTER, "%H:%M", id(sntp_time).now());
+          it.strftime(it.get_width() / 2, 90, id(font_22), secondary, id(background_color), TextAlign::TOP_CENTER, "%d.%m.%Y", id(sntp_time).now());
+          if (!id(valid_data)) {
+            it.printf(it.get_width() / 2, it.get_height() - 70, id(font_36), color, id(background_color), TextAlign::CENTER, "󰇡");
+          } else {
+            if (id(lan_active)) {
+              it.printf(it.get_width() / 2, it.get_height() - 90, id(icons_64), color, id(background_color), TextAlign::CENTER, "󰇳");
+              it.printf(it.get_width() / 2, it.get_height() - 40, id(font_28), color, id(background_color), TextAlign::CENTER, "%s", id(lan_name).c_str());
+            } else if (id(lan_exists)) {
+              it.printf(it.get_width() / 2, it.get_height() - 90, id(font_28), color, id(background_color), TextAlign::CENTER, "󰧒 %s", id(lan_name).c_str());
+              it.printf(it.get_width() / 2, it.get_height() - 50, id(font_36), color, id(background_color), TextAlign::CENTER, id(lan_eta) > 1 ? "%d Tage" : "%d Tag", id(lan_eta));
+            } else {
+              it.printf(it.get_width() / 2, it.get_height() - 70, id(font_36), color, id(background_color), TextAlign::CENTER, "󰃴");
+            }
+          }
