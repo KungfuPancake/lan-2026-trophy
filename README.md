@@ -3,6 +3,9 @@
 This is a trophy based on ESPHome, including an art display with RGB lighting and a display that shows the ETA to the next LAN party.
 The original BrezeLAN 2026 trophy sports a unique engraving on the art display that has been removed for copyright reasons.
 
+## Theory of operation
+The trophy is essentially a fancy clock that gets its time via SNTP and polls the API of [isteslan.de](https://isteslan.de) once a day. If a LAN is currently happening, the LAN name is shown and the art glass is illuminated by RGB puke. Otherwise the name of the next LAN and the ETA is displayed. In this mode the illumination color can be controlled by the user to allow for some customization.
+
 ## BOM
 * ~70g of Filament, preferably black or CF/GF filled - must be opaque to prevent light bleeding. PLA is fine, use ABS/ASA for longevity
 * 8x M3x4x5 heat set insert
