@@ -88,6 +88,26 @@ globals:
     restore_value: yes
     initial_value: "true"
 
+  - id: rainbow_mode
+    type: bool
+    restore_value: yes
+    initial_value: "false"
+
+  - id: art_red
+    type: float
+    restore_value: yes
+    initial_value: "1.0"
+
+  - id: art_green
+    type: float
+    restore_value: yes
+    initial_value: "1.0"
+
+  - id: art_blue
+    type: float
+    restore_value: yes
+    initial_value: "1.0"
+
 script:
   - id: refresh_lans
     then:
@@ -156,17 +176,13 @@ script:
           return;
         }
         
-        if (id(sign_color).current_values.is_on()) {
-          if (id(lan_active)) {
-            id(sign_internal).turn_on().set_rgb(1.0, 1.0, 1.0).set_brightness(id(sign_color).current_values.get_brightness()).set_effect("Rainbow").perform();
-          } else {
-            auto call = id(sign_internal).turn_on();
-            call.set_rgb(id(sign_color).current_values.get_red(), id(sign_color).current_values.get_green(), id(sign_color).current_values.get_blue());
-            call.set_brightness(id(sign_color).current_values.get_brightness());
-            call.set_effect("none").perform();
-          }
+        if (id(lan_active) || id(rainbow_mode)) {
+          id(sign_internal).turn_on().set_rgb(1.0, 1.0, 1.0).set_brightness(1.0).set_effect("Rainbow").perform();
         } else {
-          id(sign_internal).turn_off().perform();
+          auto call = id(sign_internal).turn_on();
+          call.set_rgb(id(art_red), id(art_green), id(art_blue));
+          call.set_brightness(1.0);
+          call.set_effect("none").perform();
         }
 
 time:
@@ -209,46 +225,79 @@ sensor:
     name: WiFi Signal
     update_interval: 60s
 
+number:
+  - platform: template
+    id: art_red_num
+    name: "Sign Red"
+    min_value: 0
+    max_value: 1
+    step: 0.01
+    restore_value: true
+    set_action:
+      - globals.set:
+          id: art_red
+          value: !lambda "return x;"
+      - script.execute: set_illumination
+
+  - platform: template
+    id: art_green_num
+    name: "Sign Green"
+    optimistic: true
+    min_value: 0
+    max_value: 1
+    step: 0.01
+    restore_value: true
+    set_action:
+      - globals.set:
+          id: art_green
+          value: !lambda "return x;"
+      - script.execute: set_illumination
+
+  - platform: template
+    id: art_blue_num
+    name: "Sign Blue"
+    optimistic: true
+    min_value: 0
+    max_value: 1
+    step: 0.01
+    restore_value: true
+    set_action:
+      - globals.set:
+          id: art_blue
+          value: !lambda "return x;"
+      - script.execute: set_illumination
+
+  - platform: template
+    id: text_red
+    name: "Text Red"
+    optimistic: true
+    min_value: 0
+    max_value: 1
+    step: 0.01
+    restore_value: true
+
+  - platform: template
+    id: text_green
+    name: "Text Green"
+    optimistic: true
+    min_value: 0
+    max_value: 1
+    step: 0.01
+    restore_value: true
+
+  - platform: template
+    id: text_blue
+    name: "Text Blue"
+    optimistic: true
+    min_value: 0
+    max_value: 1
+    step: 0.01
+    restore_value: true
+
 output:
   - platform: ledc
     pin: GPIO20
     id: backlight_out
-
-  - platform: template
-    id: sign_red
-    type: float
-    write_action:
-      - script.execute: set_illumination
-
-  - platform: template
-    id: sign_green
-    type: float
-    write_action:
-      - script.execute: set_illumination
-
-  - platform: template
-    id: sign_blue
-    type: float
-    write_action:
-      - script.execute: set_illumination
-
-  - platform: template
-    id: font_red
-    type: float
-    write_action:
-      - # nop
-
-  - platform: template
-    id: font_green
-    type: float
-    write_action:
-      - # nop
-
-  - platform: template
-    id: font_blue
-    type: float
-    write_action:
-      - # nop
 
 switch:
   - platform: template
@@ -287,6 +336,24 @@ switch:
           value: "false"
       - script.execute: set_illumination
 
+  - platform: template
+    id: rainbow_switch
+    name: "Rainbow Mode"
+    icon: mdi:unicorn
+    restore_mode: DISABLED
+    lambda: |-
+      return id(rainbow_mode);
+    turn_on_action:
+      - globals.set:
+          id: rainbow_mode
+          value: "true"
+      - script.execute: set_illumination
+    turn_off_action:
+      - globals.set:
+          id: rainbow_mode
+          value: "false"
+      - script.execute: set_illumination
+
 light:
   - platform: monochromatic
     id: backlight
@@ -308,24 +375,6 @@ light:
       - addressable_rainbow:
           name: "Rainbow"
           speed: 1
-
-  - platform: rgb
-    id: sign_color
-    name: "Art Color"
-    icon: mdi:trophy
-    restore_mode: RESTORE_DEFAULT_ON
-    red: sign_red
-    green: sign_green
-    blue: sign_blue
-
-  - platform: rgb
-    id: text_color
-    name: "Text Color"
-    icon: mdi:format-color-text
-    restore_mode: RESTORE_DEFAULT_ON
-    red: sign_red
-    green: sign_green
-    blue: sign_blue
 
 qr_code:
   - id: improv_qr
@@ -438,8 +487,8 @@ display:
         lambda: |-
           it.fill(id(background_color));
           
-          auto color = Color(id(text_color).current_values.get_red() * 255, id(text_color).current_values.get_green() * 255, id(text_color).current_values.get_blue() * 255);
-          auto secondary = Color(id(text_color).current_values.get_red() * 127, id(text_color).current_values.get_green() * 127, id(text_color).current_values.get_blue() * 127);
+          auto color = Color(id(text_red).state * 255, id(text_green).state * 255, id(text_blue).state * 255);
+          auto secondary = Color(id(text_red).state * 127, id(text_green).state * 127, id(text_blue).state * 127);
           
           if (id(improv_state) != improv::STATE_STOPPED) {
             auto size = id(improv_qr).get_size() * 5; // Multiply by scale
